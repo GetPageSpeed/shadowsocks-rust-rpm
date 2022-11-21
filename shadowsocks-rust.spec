@@ -1,6 +1,6 @@
 %define _debugsource_template %{nil}
 %global _features dns-over-https,dns-over-tls,local-dns,local-http-rustls,local-redir,local-tun
-
+# bump
 Name:    shadowsocks-rust
 Version: 1.14.3
 Release: 1%{?dist}
