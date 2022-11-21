@@ -1,9 +1,9 @@
-%global debug_package %{nil}
+%define _debugsource_template %{nil}
 %global _features dns-over-https,dns-over-tls,local-dns,local-http-rustls,local-redir,local-tun
 
 Name:    shadowsocks-rust
 Version: 1.14.3
-Release: 9%{?dist}
+Release: 1%{?dist}
 Summary: A Rust port of shadowsocks
 License: MIT
 URL: https://github.com/shadowsocks/shadowsocks-rust
@@ -12,7 +12,14 @@ Source1: shadowsocks-rust-local@.service.system
 Source2: shadowsocks-rust-server@.service.system
 Source3: shadowsocks-rust-local@.service.user
 Source4: shadowsocks-rust-server@.service.user
-BuildRequires: gcc systemd-rpm-macros
+BuildRequires: gcc
+BuildRequires: systemd-rpm-macros
+# for new macros like %%{build_cflags}
+%if 0%{?rhel} && 0%{?rhel} <= 7
+BuildRequires: epel-rpm-macros
+%else
+BuildRequires: redhat-rpm-config
+%endif
 
 %description
 This is a Rust port of shadowsocks: https://shadowsocks.org/
@@ -21,17 +28,31 @@ shadowsocks is a fast tunnel proxy that helps you bypass firewalls.
 
 %prep
 %autosetup
+# extracted for build flags, from rust-packaging %%cargo_prep
+set -eu
+%{__mkdir} -p .cargo
+cat > .cargo/config << EOF
+[term]
+verbose = true
+EOF
 
 # use latest stable rust version from rustup
 curl -Lf https://sh.rustup.rs | sh -s -- -y --profile minimal
 
 %build
 source ~/.cargo/env
-RUSTFLAGS="-C strip=symbols" cargo build --release --features %{_features}
+export CFLAGS="%{build_cflags}"
+export CXXFLAGS="%{build_cxxflags}"
+export LDFLAGS="%{build_ldflags}"
+# use hardening flags
+export RUSTFLAGS="-Clink-arg=-Wl,-z,relro,-z,now"
+cargo build --release --features %{_features}
+
 
 %check
 source ~/.cargo/env
 cargo test --release --features %{_features}
+
 
 %install
 # bin
@@ -54,6 +75,7 @@ mkdir -p %{buildroot}%{_sysconfdir}/%{name}/{local,server}
 install -Dpm 644 examples/config.json %{buildroot}%{_sysconfdir}/%{name}/example/config.json5
 install -Dpm 644 examples/config_ext.json %{buildroot}%{_sysconfdir}/%{name}/example/config_ext.json5
 
+
 %files
 %license LICENSE
 %doc README.md
@@ -67,6 +89,7 @@ install -Dpm 644 examples/config_ext.json %{buildroot}%{_sysconfdir}/%{name}/exa
 %{_userunitdir}/%{name}-local@.service
 %{_userunitdir}/%{name}-server@.service
 %config %{_sysconfdir}/%{name}/*
+
 
 %post
 # 1: install 2: update
